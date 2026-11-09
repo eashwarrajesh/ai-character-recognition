@@ -59,14 +59,27 @@ def prepare_image(pil_image):
     canvas[y0:y0+nh, x0:x0+nw] = resized
     return canvas.astype("float32") / 255.0
 
+
 def recognize_character(image, distortion, strength):
     if image is None:
         raise gr.Error("Please upload a digit image first.")
+
     original = prepare_image(image)
-    processed = original if distortion == "None" else distort_image(original, distortion, int(strength))
-    prediction = model.predict(np.expand_dims(processed, axis=(0, -1)), verbose=0)[0]
+
+    processed = (
+        original
+        if distortion == "None"
+        else distort_image(original, distortion, int(strength))
+    )
+
+    model_input = np.asarray(processed, dtype=np.float32)
+    model_input = model_input.reshape(1, 28, 28, 1)
+
+    prediction = model(model_input, training=False).numpy()[0]
+
     digit = int(np.argmax(prediction))
     confidence = float(np.max(prediction)) * 100
+
     fig, ax = plt.subplots(figsize=(7, 3))
     ax.bar(range(10), prediction * 100)
     ax.set_xticks(range(10))
@@ -76,11 +89,20 @@ def recognize_character(image, distortion, strength):
     ax.set_ylim(0, 100)
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
-    probabilities = {str(i): float(prediction[i]) for i in range(10)}
-    return ((original * 255).astype("uint8"),
-            (processed.squeeze() * 255).astype("uint8"),
-            f"Predicted Digit: {digit} | Confidence: {confidence:.2f}%",
-            probabilities, fig)
+
+    probabilities = {
+        str(i): float(prediction[i])
+        for i in range(10)
+    }
+
+    return (
+        (original * 255).astype("uint8"),
+        (processed.squeeze() * 255).astype("uint8"),
+        f"Predicted Digit: {digit} | Confidence: {confidence:.2f}%",
+        probabilities,
+        fig
+    )
+
 
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("# AI Difficult Font and Distorted Character Recognition\n"
